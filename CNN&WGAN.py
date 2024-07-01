@@ -77,7 +77,7 @@ model.add(Dropout(0.2))
 model.add(BatchNormalization())
 model.add(Dense(num_class, activation = 'softmax'))
 
-model.compile(loss='categorical_crossentropy', optimizer = 'adam', metrics = ['accuracy'] )
+model.compile(loss='categorical_crossentropy',   optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), metrics = ['accuracy'] )
 model.summary()
 
 # Define the generator model
