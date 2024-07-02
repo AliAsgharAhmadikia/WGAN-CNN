@@ -83,27 +83,28 @@ model.summary()
 # Define the generator model
 def build_generator():
     model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Dense(256, input_dim=100))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
+    model.add(tf.keras.layers.Dense(8 * 8 * 256, input_dim=100))
+    model.add(tf.keras.layers.Reshape((8, 8, 256)))
     model.add(tf.keras.layers.BatchNormalization(momentum=0.8))
-    model.add(tf.keras.layers.Dense(512))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
+    model.add(tf.keras.layers.Conv2DTranspose(128, kernel_size=4, strides=2, padding='same'))
     model.add(tf.keras.layers.BatchNormalization(momentum=0.8))
-    model.add(tf.keras.layers.Dense(1024))
     model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
+    model.add(tf.keras.layers.Conv2DTranspose(64, kernel_size=4, strides=2, padding='same'))
     model.add(tf.keras.layers.BatchNormalization(momentum=0.8))
-    model.add(tf.keras.layers.Dense(np.prod(X_train.shape[1:]), activation='tanh'))
-    model.add(tf.keras.layers.Reshape(X_train.shape[1:]))
+    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
+    model.add(tf.keras.layers.Conv2DTranspose(3, kernel_size=4, strides=1, padding='same', activation='tanh'))
     return model
 
 # Define the discriminator model
 def build_discriminator():
     model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Flatten(input_shape=X_train.shape[1:]))
-    model.add(tf.keras.layers.Dense(512))
+    model.add(tf.keras.layers.Conv2D(64, kernel_size=4, strides=2, padding='same', input_shape=X_train.shape[1:]))
     model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.Dense(256))
+    model.add(tf.keras.layers.Conv2D(128, kernel_size=4, strides=2, padding='same'))
     model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
+    model.add(tf.keras.layers.Conv2D(256, kernel_size=4, strides=2, padding='same'))
+    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
+    model.add(tf.keras.layers.Flatten())
     model.add(tf.keras.layers.Dense(1))
     return model
 
@@ -184,20 +185,21 @@ def g_loss_fn(fake_img):
 # Compile the WGAN model
 wgan = WGAN(generator=generator, discriminator=discriminator)
 wgan.compile(
-    d_optimizer=tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9),
-    g_optimizer=tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9),
+    d_optimizer=tf.keras.optimizers.Adam(learning_rate=0.00005, beta_1=0.5, beta_2=0.9),
+    g_optimizer=tf.keras.optimizers.Adam(learning_rate=0.00005, beta_1=0.5, beta_2=0.9),
     d_loss_fn=d_loss_fn,
     g_loss_fn=g_loss_fn,
 )
 
 # Training the WGAN
-whistory=wgan.fit(X_train, batch_size=64, epochs=100)
+whistory=wgan.fit(X_train, batch_size=32, epochs=60)
 for key,val in whistory.history.items():
   print(key)
 
 pd.DataFrame(whistory.history).plot()
-plt.plot(whistory.history['d_loss'])
-plt.plot(whistory.history['g_loss'])
+plt.plot(whistory.history['d_loss'], label='d_loss')
+plt.plot(whistory.history['g_loss'], label='g_loss')
+plt.legend()
 plt.show()
 
 # Generate synthetic images
@@ -218,7 +220,7 @@ augmented_y_train = np.concatenate([y_train, to_categorical(np.random.randint(0,
 
 
 # Train the CNN with the augmented dataset
-history = model.fit(augmented_X_train, augmented_y_train, validation_data=(X_test, y_test), epochs=100, batch_size=64, callbacks=[EarlyStopping(patience=100)])
+history = model.fit(augmented_X_train, augmented_y_train, validation_data=(X_test, y_test), epochs=100, batch_size=64, callbacks=[EarlyStopping(patience=200)])
 
 for key,val in history.history.items():
   print(key)
