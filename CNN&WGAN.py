@@ -207,15 +207,25 @@ def generate_synthetic_images(generator, num_images):
     random_latent_vectors = tf.random.normal(shape=(num_images, 100))
     synthetic_images = generator(random_latent_vectors)
     return synthetic_images
+# Function to assign labels to synthetic images using the discriminator
+def assign_labels_to_synthetic_images(discriminator, synthetic_images):
+    # Get logits from discriminator
+    logits = discriminator(synthetic_images)
+    # Convert logits to probabilities and then to class labels
+    labels = np.argmax(logits.numpy(), axis=1)
+    return labels
 
 # Generate synthetic images
 num_synthetic_images = 5000
 synthetic_images = generate_synthetic_images(generator, num_synthetic_images)
 
-# Combine real and synthetic images
-augmented_X_train = np.concatenate([X_train, synthetic_images])
-augmented_y_train = np.concatenate([y_train, to_categorical(np.random.randint(0, num_class, num_synthetic_images), num_classes=num_class)])
+# Assign labels to synthetic images
+synthetic_labels = assign_labels_to_synthetic_images(discriminator, synthetic_images)
+synthetic_labels = to_categorical(synthetic_labels, num_classes=num_class)
 
+# Combine real and synthetic images and labels
+augmented_X_train = np.concatenate([X_train, synthetic_images])
+augmented_y_train = np.concatenate([y_train, synthetic_labels])
 
 
 
