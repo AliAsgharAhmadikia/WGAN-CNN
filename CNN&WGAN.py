@@ -105,7 +105,7 @@ def build_discriminator():
     model.add(tf.keras.layers.Conv2D(256, kernel_size=4, strides=2, padding='same'))
     model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
     model.add(tf.keras.layers.Flatten())
-    model.add(tf.keras.layers.Dense(1))
+    model.add(tf.keras.layers.Dense(num_class, activation='softmax'))
     return model
 
 # Build and compile the models
