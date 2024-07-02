@@ -83,28 +83,46 @@ model.summary()
 # Define the generator model
 def build_generator():
     model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Dense(256, input_dim=100))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.BatchNormalization(momentum=0.8))
-    model.add(tf.keras.layers.Dense(512))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.BatchNormalization(momentum=0.8))
-    model.add(tf.keras.layers.Dense(1024))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.BatchNormalization(momentum=0.8))
-    model.add(tf.keras.layers.Dense(np.prod(X_train.shape[1:]), activation='tanh'))
-    model.add(tf.keras.layers.Reshape(X_train.shape[1:]))
+    model.add(Dense(4 * 4 * 256, input_dim=100))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Reshape((4, 4, 256)))
+    
+    model.add(Conv2DTranspose(128, kernel_size=4, strides=2, padding="same"))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(BatchNormalization(momentum=0.8))
+    
+    model.add(Conv2DTranspose(64, kernel_size=4, strides=2, padding="same"))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(BatchNormalization(momentum=0.8))
+    
+    model.add(Conv2DTranspose(3, kernel_size=4, strides=2, padding="same", activation='tanh'))
     return model
 
 # Define the discriminator model
 def build_discriminator():
     model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Flatten(input_shape=X_train.shape[1:]))
-    model.add(tf.keras.layers.Dense(512))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.Dense(256))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.Dense(1))
+    model.add(Conv2D(32, kernel_size=3, strides=2, input_shape=X_train.shape[1:], padding="same"))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
+    
+    model.add(Conv2D(64, kernel_size=3, strides=2, padding="same"))
+    model.add(ZeroPadding2D(padding=((0,1),(0,1))))
+    model.add(BatchNormalization(momentum=0.8))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
+    
+    model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
+    model.add(BatchNormalization(momentum=0.8))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
+    
+    model.add(Conv2D(256, kernel_size=3, strides=1, padding="same"))
+    model.add(BatchNormalization(momentum=0.8))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
+    
+    model.add(Flatten())
+    model.add(Dense(1))
     return model
 
 # Build and compile the models
