@@ -79,6 +79,14 @@ model.add(Dense(num_class, activation = 'softmax'))
 
 model.compile(loss='categorical_crossentropy',   optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), metrics = ['accuracy'] )
 model.summary()
+history = model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=30, batch_size=64, callbacks=[EarlyStopping(patience=100)])
+model.save('CNN_cifar10.h5')
+pickle.dump(model, open('./model_.p', 'wb'))
+
+# Continue from where we left off
+
+model2 = load_model('CNN_cifar10.h5')
+
 
 # Define the generator model
 def build_generator():
@@ -209,7 +217,7 @@ wgan.compile(
 )
 
 # Training the WGAN
-whistory=wgan.fit(X_train, batch_size=64, epochs=100)
+whistory=wgan.fit(X_train, batch_size=64, epochs=50)
 for key,val in whistory.history.items():
   print(key)
 
@@ -227,10 +235,11 @@ def generate_synthetic_images(generator, num_images):
 # Generate synthetic images
 num_synthetic_images = 5000
 synthetic_images = generate_synthetic_images(generator, num_synthetic_images)
-
+predicted_y_train=model2.predict(synthetic_images)
 # Combine real and synthetic images
 augmented_X_train = np.concatenate([X_train, synthetic_images])
-augmented_y_train = np.concatenate([y_train, to_categorical(np.random.randint(0, num_class, num_synthetic_images), num_classes=num_class)])
+
+augmented_y_train = np.concatenate([y_train, predicted_y_train])
 
 
 
@@ -251,17 +260,17 @@ pickle.dump(model, open('./model_augmented.p', 'wb'))
 
 # Continue from where we left off
 
-model2 = load_model('CNN_cifar10_augmented.h5')
+model3 = load_model('CNN_cifar10_augmented.h5')
 
 labels = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
 # Evaluate the model on test set
-scores = model2.evaluate(X_test, y_test, verbose=1)
+scores = model3.evaluate(X_test, y_test, verbose=1)
 print('Test loss:', scores[0])
 print('Test accuracy:', scores[1])
 
 # Confusion matrix
-y_pred = model2.predict(X_test)
+y_pred = model3.predict(X_test)
 y_pred_classes = np.argmax(y_pred, axis=1)
 y_true = np.argmax(y_test, axis=1)
 confusion_mtx = confusion_matrix(y_true, y_pred_classes)
