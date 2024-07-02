@@ -193,15 +193,15 @@ def g_loss_fn(fake_img):
 cwgan = CWGAN(generator=generator, discriminator=discriminator)
 
 cwgan.compile(
-    d_optimizer=tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9),
-    g_optimizer=tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9),
+    d_optimizer=tf.keras.optimizers.Adam(learning_rate=0.00005, beta_1=0.5, beta_2=0.9),
+    g_optimizer=tf.keras.optimizers.Adam(learning_rate=0.00005, beta_1=0.5, beta_2=0.9),
     d_loss_fn=d_loss_fn,
     g_loss_fn=g_loss_fn,
 )
 
 
 # Training the CWGAN
-def train_cwgan(cwgan, X_train, y_train, epochs=100, batch_size=64):
+def train_cwgan(cwgan, X_train, y_train, epochs=50, batch_size=32):
     for epoch in range(epochs):
         print(f"Epoch {epoch + 1}/{epochs}")
         for batch_idx in range(X_train.shape[0] // batch_size):
@@ -212,7 +212,7 @@ def train_cwgan(cwgan, X_train, y_train, epochs=100, batch_size=64):
         print()
 
 # Train the CWGAN
-train_cwgan(cwgan, X_train, y_train, epochs=100, batch_size=64)
+train_cwgan(cwgan, X_train, y_train, epochs=50, batch_size=32)
 
 # Generate synthetic images
 def generate_synthetic_images(generator, num_images, num_class):
