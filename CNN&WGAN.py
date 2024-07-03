@@ -7,7 +7,7 @@ from tensorflow import keras
 from tensorflow.keras.constraints import MaxNorm
 from sklearn.preprocessing import OneHotEncoder
 from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Conv2D, MaxPool2D, Dense, Dropout, Flatten
+from tensorflow.keras.layers import Conv2D, MaxPool2D, Dense, Dropout, Flatten ,LeakyReLU ,Reshape ,Conv2DTranspose ,ZeroPadding2D
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.callbacks import EarlyStopping
 from sklearn.metrics import confusion_matrix
