@@ -1,13 +1,13 @@
 # # Install required libraries
 # !pip install tensorflow
-# !pip install seaborn
+# !python -m venv sklearn-env
 # !pip install pandas
 
 from tensorflow import keras
 from tensorflow.keras.constraints import MaxNorm
 from sklearn.preprocessing import OneHotEncoder
 from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Conv2D, MaxPool2D, Dense, Dropout, Flatten
+from tensorflow.keras.layers import Conv2D, MaxPool2D, Dense, Dropout, Flatten ,LeakyReLU ,Reshape ,Conv2DTranspose ,ZeroPadding2D
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.callbacks import EarlyStopping
 from sklearn.metrics import confusion_matrix
@@ -22,6 +22,18 @@ from sklearn.utils import shuffle
 import tensorflow as tf
 import pickle
 from tensorflow.python.client import device_lib
+import random
+# Set seed value
+seed_value = 123
+
+# Set the seed for numpy
+np.random.seed(seed_value)
+
+# Set the seed for the random module
+random.seed(seed_value)
+
+# Set the seed for TensorFlow
+tf.random.set_seed(seed_value)
 
 print(device_lib.list_local_devices())
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -38,8 +50,13 @@ plt.imshow(X_train[0])
 
 X_train = X_train.astype('float32')
 X_test = X_test.astype('float32')
-X_train = X_train / 255.0
-X_test = X_test / 255.0
+# Normalize input data to [-1, 1] for WGAN
+X_train_wgan = (X_train - 127.5) / 127.5
+X_test_wgan = (X_test - 127.5) / 127.5
+
+# Normalize input data to [0, 1] for CNN
+X_train_cnn = X_train / 255.0
+X_test_cnn = X_test / 255.0
 # One hot encoding using keras.utils
 from keras.utils import to_categorical
 y_train = to_categorical(y_train)
@@ -51,62 +68,90 @@ num_class = y_test.shape[1] #10
 print(X_train.shape[1:])
 
 # CNN Model
-model = Sequential()
-model.add(Conv2D(32, (3,3), padding='same', input_shape=X_train.shape[1:], activation='relu', kernel_constraint=MaxNorm(3)))
-model.add(Dropout(0.2))
-model.add(BatchNormalization())
-model.add(Conv2D(64, (3,3), padding='same', activation='relu', kernel_constraint=MaxNorm(3)))
-model.add(MaxPool2D(2))
-model.add(Dropout(0.2))
-model.add(BatchNormalization())
+def create_cnn_model(input_shape, num_class):
+    model = Sequential()
+    model.add(Conv2D(32, (3,3), padding='same', input_shape=input_shape, activation='relu', kernel_constraint=MaxNorm(3)))
+    model.add(Dropout(0.2))
+    model.add(BatchNormalization())
+    model.add(Conv2D(64, (3,3), padding='same', activation='relu', kernel_constraint=MaxNorm(3)))
+    model.add(MaxPool2D(2))
+    model.add(Dropout(0.2))
+    model.add(BatchNormalization())
 
-model.add(Conv2D(64, (3,3), padding='same', activation='relu', kernel_constraint=MaxNorm(3)))
-model.add(MaxPool2D(2))
-model.add(Dropout(0.2))
-model.add(BatchNormalization())
+    model.add(Conv2D(64, (3,3), padding='same', activation='relu', kernel_constraint=MaxNorm(3)))
+    model.add(MaxPool2D(2))
+    model.add(Dropout(0.2))
+    model.add(BatchNormalization())
 
-model.add(Conv2D(128, (3,3), padding='same', activation='relu', kernel_constraint=MaxNorm(3)))
-model.add(Dropout(0.2))
-model.add(BatchNormalization())
+    model.add(Conv2D(128, (3,3), padding='same', activation='relu', kernel_constraint=MaxNorm(3)))
+    model.add(Dropout(0.2))
+    model.add(BatchNormalization())
 
-model.add(Flatten())
-model.add(Dropout(0.2))
+    model.add(Flatten())
+    model.add(Dropout(0.2))
 
-model.add(Dense(32, activation='relu', kernel_constraint=MaxNorm(3)))
-model.add(Dropout(0.2))
-model.add(BatchNormalization())
-model.add(Dense(num_class, activation = 'softmax'))
+    model.add(Dense(32, activation='relu', kernel_constraint=MaxNorm(3)))
+    model.add(Dropout(0.2))
+    model.add(BatchNormalization())
+    model.add(Dense(num_class, activation='softmax'))
 
-model.compile(loss='categorical_crossentropy',   optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), metrics = ['accuracy'] )
+    model.compile(loss='categorical_crossentropy', optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), metrics=['accuracy'])
+    return model
+model = create_cnn_model(X_train_cnn.shape[1:], num_class)
 model.summary()
+history = model.fit(X_train_cnn, y_train, validation_data=(X_test_cnn, y_test), epochs=30, batch_size=64, callbacks=[EarlyStopping(patience=100)])
+model.save('CNN_cifar10.h5')
+pickle.dump(model, open('./model_.p', 'wb'))
+
+# Continue from where we left off
+
+model2 = load_model('CNN_cifar10.h5')
+
 
 # Define the generator model
 def build_generator():
-    model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Dense(256, input_dim=100))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.BatchNormalization(momentum=0.8))
-    model.add(tf.keras.layers.Dense(512))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.BatchNormalization(momentum=0.8))
-    model.add(tf.keras.layers.Dense(1024))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.BatchNormalization(momentum=0.8))
-    model.add(tf.keras.layers.Dense(np.prod(X_train.shape[1:]), activation='tanh'))
-    model.add(tf.keras.layers.Reshape(X_train.shape[1:]))
+    model = Sequential()
+    model.add(Dense(4 * 4 * 256, input_dim=100, kernel_initializer=tf.keras.initializers.RandomNormal(0, 0.02)))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Reshape((4, 4, 256)))
+
+    model.add(Conv2DTranspose(128, kernel_size=4, strides=2, padding="same", kernel_initializer=tf.keras.initializers.RandomNormal(0, 0.02)))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(BatchNormalization(momentum=0.8))
+
+    model.add(Conv2DTranspose(64, kernel_size=4, strides=2, padding="same", kernel_initializer=tf.keras.initializers.RandomNormal(0, 0.02)))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(BatchNormalization(momentum=0.8))
+
+    model.add(Conv2DTranspose(3, kernel_size=4, strides=2, padding="same", activation='tanh', kernel_initializer=tf.keras.initializers.RandomNormal(0, 0.02)))
     return model
 
 # Define the discriminator model
 def build_discriminator():
-    model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Flatten(input_shape=X_train.shape[1:]))
-    model.add(tf.keras.layers.Dense(512))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.Dense(256))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.Dense(1))
-    return model
+    model = Sequential()
+    model.add(Conv2D(32, kernel_size=3, strides=2, input_shape=(32, 32, 3), padding="same", kernel_initializer=tf.keras.initializers.RandomNormal(0, 0.02)))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
 
+    model.add(Conv2D(64, kernel_size=3, strides=2, padding="same", kernel_initializer=tf.keras.initializers.RandomNormal(0, 0.02)))
+    model.add(ZeroPadding2D(padding=((0,1),(0,1))))
+    model.add(BatchNormalization(momentum=0.8))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
+
+    model.add(Conv2D(128, kernel_size=3, strides=2, padding="same", kernel_initializer=tf.keras.initializers.RandomNormal(0, 0.02)))
+    model.add(BatchNormalization(momentum=0.8))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
+
+    model.add(Conv2D(256, kernel_size=3, strides=1, padding="same", kernel_initializer=tf.keras.initializers.RandomNormal(0, 0.02)))
+    model.add(BatchNormalization(momentum=0.8))
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
+
+    model.add(Flatten())
+    model.add(Dense(1))
+    return model
 # Build and compile the models
 generator = build_generator()
 discriminator = build_discriminator()
@@ -173,7 +218,6 @@ class WGAN(tf.keras.Model):
         self.g_optimizer.apply_gradients(zip(g_grads, self.generator.trainable_variables))
 
         return {"d_loss": d_loss, "g_loss": g_loss}
-
 # Define the loss functions
 def d_loss_fn(real_img, fake_img):
     return tf.reduce_mean(fake_img) - tf.reduce_mean(real_img)
@@ -191,7 +235,7 @@ wgan.compile(
 )
 
 # Training the WGAN
-whistory=wgan.fit(X_train, batch_size=64, epochs=100)
+whistory=wgan.fit(X_train_wgan, batch_size=64, epochs=100)
 for key,val in whistory.history.items():
   print(key)
 
@@ -210,15 +254,26 @@ def generate_synthetic_images(generator, num_images):
 num_synthetic_images = 5000
 synthetic_images = generate_synthetic_images(generator, num_synthetic_images)
 
+# Normalize synthetic images back to [0, 1] for CNN
+synthetic_images = (synthetic_images + 1) / 2.0
+
+
+predicted_y_train=model2.predict(synthetic_images)
+
+
 # Combine real and synthetic images
-augmented_X_train = np.concatenate([X_train, synthetic_images])
-augmented_y_train = np.concatenate([y_train, to_categorical(np.random.randint(0, num_class, num_synthetic_images), num_classes=num_class)])
+augmented_X_train = np.concatenate([X_train_cnn, synthetic_images])
+
+augmented_y_train = np.concatenate([y_train, predicted_y_train])
 
 
-
+# Recreate the CNN model from scratch
+model_augmented = create_cnn_model(X_train_cnn.shape[1:], num_class)
+model_augmented.summary()
 
 # Train the CNN with the augmented dataset
-history = model.fit(augmented_X_train, augmented_y_train, validation_data=(X_test, y_test), epochs=100, batch_size=64, callbacks=[EarlyStopping(patience=100)])
+history=0
+history = model_augmented.fit(augmented_X_train, augmented_y_train, validation_data=(X_test_cnn, y_test), epochs=200, batch_size=64, callbacks=[EarlyStopping(patience=100)])
 
 for key,val in history.history.items():
   print(key)
@@ -228,22 +283,22 @@ plt.plot(history.history['accuracy'])
 plt.plot(history.history['val_accuracy'])
 plt.show()
 
-model.save('CNN_cifar10_augmented.h5')
-pickle.dump(model, open('./model_augmented.p', 'wb'))
+model_augmented.save('CNN_cifar10_augmented.h5')
+pickle.dump(model_augmented, open('./model_augmented.p', 'wb'))
 
 # Continue from where we left off
 
-model2 = load_model('CNN_cifar10_augmented.h5')
+model3 = load_model('CNN_cifar10_augmented.h5')
 
 labels = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
 # Evaluate the model on test set
-scores = model2.evaluate(X_test, y_test, verbose=1)
+scores = model3.evaluate(X_test_cnn, y_test, verbose=1)
 print('Test loss:', scores[0])
 print('Test accuracy:', scores[1])
 
 # Confusion matrix
-y_pred = model2.predict(X_test)
+y_pred = model3.predict(X_test_cnn)
 y_pred_classes = np.argmax(y_pred, axis=1)
 y_true = np.argmax(y_test, axis=1)
 confusion_mtx = confusion_matrix(y_true, y_pred_classes)
@@ -256,10 +311,5 @@ plt.xlabel('Predicted labels')
 plt.ylabel('True labels')
 plt.title('Confusion Matrix')
 plt.show()
-
-
-
-
-
 
 
